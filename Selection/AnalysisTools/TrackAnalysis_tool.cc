@@ -26,6 +26,8 @@
 #include "larreco/RecoAlg/TrackMomentumCalculator.h"
 #include "lardataobj/RecoBase/SpacePoint.h"
 
+#include "../E4Track/Hypfit.h"
+
 namespace analysis
 {
 ////////////////////////////////////////////////////////////////////////
@@ -98,6 +100,12 @@ private:
   float CalculateTrackTrunkdEdxByRange(const std::vector<float> &dedxPerHit, const std::vector<float> &residualRangePerHit);
   void CalculateTrackDeflections(const art::Ptr<recob::Track> &trk, std::vector<float> &mean_v, std::vector<float> &stdev_v, std::vector<float> &separation_mean_v);
 
+  float DoHypFits(const std::vector<float> &dedxPerHit,
+                  const std::vector<float> &residualRangePerHit,
+                  int pdg);
+  std::vector<std::pair<float, unsigned int>> GetSortedRRIndices(
+     const std::vector<float> &residualRangePerHit, bool far_first=true);
+
   const trkf::TrackMomentumCalculator _trkmom;
   const trkf::TrajectoryMCSFitter _mcsfitter;
 
@@ -107,6 +115,12 @@ private:
   searchingfornues::LLRPID llr_pid_calculator;
   searchingfornues::ProtonMuonLookUpParameters protonmuon_parameters;
   searchingfornues::CorrectionLookUpParameters correction_parameters;
+
+  E4Track::Hypfit fHypFitter;
+  // E4Track::PhysdEdx proton_dedx; //= new E4Track::PhysdEdx(2212);
+  // E4Track::PhysdEdx pion_dedx;   //= new E4Track::PhysdEdx(211);
+  // E4Track::PhysdEdx kaon_dedx;   //= new E4Track::PhysdEdx(321);
+  // E4Track::PhysdEdx muon_dedx;   //= new E4Track::PhysdEdx(13);
 
   art::InputTag fCALOproducer;
   art::InputTag fPIDproducer;
@@ -231,6 +245,34 @@ private:
   std::vector<float> _trk_avg_deflection_separation_mean_v;
 
   std::vector<int> _trk_end_spacepoints_v;
+
+  std::vector<float> _trk_hypfit_proton_likelihood_u_v;
+  std::vector<float> _trk_hypfit_proton_likelihood_v_v;
+  std::vector<float> _trk_hypfit_proton_likelihood_y_v;
+  std::vector<float> _trk_hypfit_proton_gaus_u_v;
+  std::vector<float> _trk_hypfit_proton_gaus_v_v;
+  std::vector<float> _trk_hypfit_proton_gaus_y_v;
+
+  std::vector<float> _trk_hypfit_pion_likelihood_u_v;
+  std::vector<float> _trk_hypfit_pion_likelihood_v_v;
+  std::vector<float> _trk_hypfit_pion_likelihood_y_v;
+  std::vector<float> _trk_hypfit_pion_gaus_u_v;
+  std::vector<float> _trk_hypfit_pion_gaus_v_v;
+  std::vector<float> _trk_hypfit_pion_gaus_y_v;
+
+  std::vector<float> _trk_hypfit_muon_likelihood_u_v;
+  std::vector<float> _trk_hypfit_muon_likelihood_v_v;
+  std::vector<float> _trk_hypfit_muon_likelihood_y_v;
+  std::vector<float> _trk_hypfit_muon_gaus_u_v;
+  std::vector<float> _trk_hypfit_muon_gaus_v_v;
+  std::vector<float> _trk_hypfit_muon_gaus_y_v;
+
+  std::vector<float> _trk_hypfit_kaon_likelihood_u_v;
+  std::vector<float> _trk_hypfit_kaon_likelihood_v_v;
+  std::vector<float> _trk_hypfit_kaon_likelihood_y_v;
+  std::vector<float> _trk_hypfit_kaon_gaus_u_v;
+  std::vector<float> _trk_hypfit_kaon_gaus_v_v;
+  std::vector<float> _trk_hypfit_kaon_gaus_y_v;
 };
 
 //----------------------------------------------------------------------------
@@ -240,8 +282,8 @@ private:
 ///
 /// pset - Fcl parameters.
 ///
-TrackAnalysis::TrackAnalysis(const fhicl::ParameterSet &p) : _mcsfitter(fhicl::Table<trkf::TrajectoryMCSFitter::Config>(p.get<fhicl::ParameterSet>("mcsfitmu")))
-{
+TrackAnalysis::TrackAnalysis(const fhicl::ParameterSet &p)
+  : _mcsfitter(fhicl::Table<trkf::TrajectoryMCSFitter::Config>(p.get<fhicl::ParameterSet>("mcsfitmu"))) {
   fCALOproducer = p.get<art::InputTag>("CALOproducer");
   fPIDproducer = p.get<art::InputTag>("PIDproducer");
   fTRKproducer = p.get<art::InputTag>("TRKproducer");
@@ -762,6 +804,34 @@ void TrackAnalysis::fillDefault()
   _trk_avg_deflection_separation_mean_v.push_back(std::numeric_limits<float>::lowest());
 
   _trk_end_spacepoints_v.push_back(std::numeric_limits<int>::lowest());
+
+  _trk_hypfit_proton_likelihood_u_v.push_back(std::numeric_limits<int>::lowest());
+  _trk_hypfit_proton_likelihood_v_v.push_back(std::numeric_limits<int>::lowest());
+  _trk_hypfit_proton_likelihood_y_v.push_back(std::numeric_limits<int>::lowest());
+  _trk_hypfit_proton_gaus_u_v.push_back(std::numeric_limits<int>::lowest());
+  _trk_hypfit_proton_gaus_v_v.push_back(std::numeric_limits<int>::lowest());
+  _trk_hypfit_proton_gaus_y_v.push_back(std::numeric_limits<int>::lowest());
+
+  _trk_hypfit_pion_likelihood_u_v.push_back(std::numeric_limits<int>::lowest());
+  _trk_hypfit_pion_likelihood_v_v.push_back(std::numeric_limits<int>::lowest());
+  _trk_hypfit_pion_likelihood_y_v.push_back(std::numeric_limits<int>::lowest());
+  _trk_hypfit_pion_gaus_u_v.push_back(std::numeric_limits<int>::lowest());
+  _trk_hypfit_pion_gaus_v_v.push_back(std::numeric_limits<int>::lowest());
+  _trk_hypfit_pion_gaus_y_v.push_back(std::numeric_limits<int>::lowest());
+
+  _trk_hypfit_muon_likelihood_u_v.push_back(std::numeric_limits<int>::lowest());
+  _trk_hypfit_muon_likelihood_v_v.push_back(std::numeric_limits<int>::lowest());
+  _trk_hypfit_muon_likelihood_y_v.push_back(std::numeric_limits<int>::lowest());
+  _trk_hypfit_muon_gaus_u_v.push_back(std::numeric_limits<int>::lowest());
+  _trk_hypfit_muon_gaus_v_v.push_back(std::numeric_limits<int>::lowest());
+  _trk_hypfit_muon_gaus_y_v.push_back(std::numeric_limits<int>::lowest());
+
+  _trk_hypfit_kaon_likelihood_u_v.push_back(std::numeric_limits<int>::lowest());
+  _trk_hypfit_kaon_likelihood_v_v.push_back(std::numeric_limits<int>::lowest());
+  _trk_hypfit_kaon_likelihood_y_v.push_back(std::numeric_limits<int>::lowest());
+  _trk_hypfit_kaon_gaus_u_v.push_back(std::numeric_limits<int>::lowest());
+  _trk_hypfit_kaon_gaus_v_v.push_back(std::numeric_limits<int>::lowest());
+  _trk_hypfit_kaon_gaus_y_v.push_back(std::numeric_limits<int>::lowest());
 }
 
 void TrackAnalysis::setBranches(TTree *_tree)
@@ -871,6 +941,31 @@ void TrackAnalysis::setBranches(TTree *_tree)
   _tree->Branch("trk_avg_deflection_separation_mean_v", "std::vector<float>", &_trk_avg_deflection_separation_mean_v);
 
   _tree->Branch("trk_end_spacepoints_v", "std::vector<int>", &_trk_end_spacepoints_v);
+
+  _tree->Branch("_trk_hypfit_proton_likelihood_u_v", "std::vector<float>", &_trk_hypfit_proton_likelihood_u_v);
+  _tree->Branch("_trk_hypfit_proton_likelihood_v_v", "std::vector<float>", &_trk_hypfit_proton_likelihood_v_v);
+  _tree->Branch("_trk_hypfit_proton_likelihood_y_v", "std::vector<float>", &_trk_hypfit_proton_likelihood_y_v);
+  _tree->Branch("_trk_hypfit_proton_gaus_u_v", "std::vector<float>", &_trk_hypfit_proton_gaus_u_v);
+  _tree->Branch("_trk_hypfit_proton_gaus_v_v", "std::vector<float>", &_trk_hypfit_proton_gaus_v_v);
+  _tree->Branch("_trk_hypfit_proton_gaus_y_v", "std::vector<float>", &_trk_hypfit_proton_gaus_y_v);
+  _tree->Branch("_trk_hypfit_pion_likelihood_u_v", "std::vector<float>", &_trk_hypfit_pion_likelihood_u_v);
+  _tree->Branch("_trk_hypfit_pion_likelihood_v_v", "std::vector<float>", &_trk_hypfit_pion_likelihood_v_v);
+  _tree->Branch("_trk_hypfit_pion_likelihood_y_v", "std::vector<float>", &_trk_hypfit_pion_likelihood_y_v);
+  _tree->Branch("_trk_hypfit_pion_gaus_u_v", "std::vector<float>", &_trk_hypfit_pion_gaus_u_v);
+  _tree->Branch("_trk_hypfit_pion_gaus_v_v", "std::vector<float>", &_trk_hypfit_pion_gaus_v_v);
+  _tree->Branch("_trk_hypfit_pion_gaus_y_v", "std::vector<float>", &_trk_hypfit_pion_gaus_y_v);
+  _tree->Branch("_trk_hypfit_muon_likelihood_u_v", "std::vector<float>", &_trk_hypfit_muon_likelihood_u_v);
+  _tree->Branch("_trk_hypfit_muon_likelihood_v_v", "std::vector<float>", &_trk_hypfit_muon_likelihood_v_v);
+  _tree->Branch("_trk_hypfit_muon_likelihood_y_v", "std::vector<float>", &_trk_hypfit_muon_likelihood_y_v);
+  _tree->Branch("_trk_hypfit_muon_gaus_u_v", "std::vector<float>", &_trk_hypfit_muon_gaus_u_v);
+  _tree->Branch("_trk_hypfit_muon_gaus_v_v", "std::vector<float>", &_trk_hypfit_muon_gaus_v_v);
+  _tree->Branch("_trk_hypfit_muon_gaus_y_v", "std::vector<float>", &_trk_hypfit_muon_gaus_y_v);
+  _tree->Branch("_trk_hypfit_kaon_likelihood_u_v", "std::vector<float>", &_trk_hypfit_kaon_likelihood_u_v);
+  _tree->Branch("_trk_hypfit_kaon_likelihood_v_v", "std::vector<float>", &_trk_hypfit_kaon_likelihood_v_v);
+  _tree->Branch("_trk_hypfit_kaon_likelihood_y_v", "std::vector<float>", &_trk_hypfit_kaon_likelihood_y_v);
+  _tree->Branch("_trk_hypfit_kaon_gaus_u_v", "std::vector<float>", &_trk_hypfit_kaon_gaus_u_v);
+  _tree->Branch("_trk_hypfit_kaon_gaus_v_v", "std::vector<float>", &_trk_hypfit_kaon_gaus_v_v);
+  _tree->Branch("_trk_hypfit_kaon_gaus_y_v", "std::vector<float>", &_trk_hypfit_kaon_gaus_y_v);
 }
 
 void TrackAnalysis::resetTTree(TTree *_tree)
@@ -982,6 +1077,34 @@ void TrackAnalysis::resetTTree(TTree *_tree)
   _trk_avg_deflection_separation_mean_v.clear();
 
   _trk_end_spacepoints_v.clear();
+
+  _trk_hypfit_proton_likelihood_u_v.clear();
+  _trk_hypfit_proton_likelihood_v_v.clear();
+  _trk_hypfit_proton_likelihood_y_v.clear();
+  _trk_hypfit_proton_gaus_u_v.clear();
+  _trk_hypfit_proton_gaus_v_v.clear();
+  _trk_hypfit_proton_gaus_y_v.clear();
+
+  _trk_hypfit_pion_likelihood_u_v.clear();
+  _trk_hypfit_pion_likelihood_v_v.clear();
+  _trk_hypfit_pion_likelihood_y_v.clear();
+  _trk_hypfit_pion_gaus_u_v.clear();
+  _trk_hypfit_pion_gaus_v_v.clear();
+  _trk_hypfit_pion_gaus_y_v.clear();
+
+  _trk_hypfit_muon_likelihood_u_v.clear();
+  _trk_hypfit_muon_likelihood_v_v.clear();
+  _trk_hypfit_muon_likelihood_y_v.clear();
+  _trk_hypfit_muon_gaus_u_v.clear();
+  _trk_hypfit_muon_gaus_v_v.clear();
+  _trk_hypfit_muon_gaus_y_v.clear();
+
+  _trk_hypfit_kaon_likelihood_u_v.clear();
+  _trk_hypfit_kaon_likelihood_v_v.clear();
+  _trk_hypfit_kaon_likelihood_y_v.clear();
+  _trk_hypfit_kaon_gaus_u_v.clear();
+  _trk_hypfit_kaon_gaus_v_v.clear();
+  _trk_hypfit_kaon_gaus_y_v.clear();
 }
 
 float TrackAnalysis::CalculateTrackTrunkdEdxByHits(const std::vector<float> &dEdx_values) 
@@ -1045,6 +1168,49 @@ float TrackAnalysis::CalculateTrackTrunkdEdxByHits(const std::vector<float> &dEd
   }
 }
 
+float TrackAnalysis::DoHypFits(const std::vector<float> &dedxPerHit,
+                               const std::vector<float> &residualRangePerHit,
+                               int pdg) {
+  //First -- sort by residual range indices. Shortest first
+  auto res_range_indices = GetSortedRRIndices(residualRangePerHit);
+  std::vector<double> sorted_res_range, sorted_dedx;
+  for (const auto & [rr, index] : res_range_indices) {
+    sorted_res_range.push_back(rr);
+    sorted_dedx.push_back(dedxPerHit[index]);
+  }
+
+  return fHypFitter.Likelihood(sorted_dedx, sorted_res_range, pdg);
+}
+
+std::vector<std::pair<float, unsigned int>> TrackAnalysis::GetSortedRRIndices(
+    const std::vector<float> &residualRangePerHit, bool far_first) {
+  // Make the vector of pairs to keep track of the incides
+  // and find the maximum residual range
+  std::vector<std::pair<float, unsigned int> > residualRangeIndices;
+  // float maxResidualRange = -std::numeric_limits<float>::max();
+  for (unsigned int i = 0; i < residualRangePerHit.size(); ++i) {
+      const auto residualRange = residualRangePerHit.at(i);
+      // maxResidualRange = std::max(maxResidualRange, residualRange);
+      residualRangeIndices.emplace_back(residualRange, i);
+  }
+  // Sort the residual ranges such that:
+  // far_first=True -->
+  //    the largest residual range
+  //   (closest to the start of the track) first
+  // far_first=False -->
+  //    the shortest residual range
+  //   (closest to the end of the track) first
+  std::sort(
+      residualRangeIndices.begin(), residualRangeIndices.end(),
+      [=](auto &a, auto &b) {
+        return (far_first ? (a.first > b.first) : (a.first < b.first));
+      }
+  );
+
+  return residualRangeIndices;
+
+}
+
 float TrackAnalysis::CalculateTrackTrunkdEdxByRange(const std::vector<float> &dedxPerHit, const std::vector<float> &residualRangePerHit)
 {
   const auto nHitsToSkip = 3u;
@@ -1070,6 +1236,8 @@ float TrackAnalysis::CalculateTrackTrunkdEdxByRange(const std::vector<float> &de
   std::sort(residualRangeIndices.begin(), residualRangeIndices.end(), [](auto &a, auto &b) {
       return a.first > b.first;
   });
+
+  //TODO -- run the the sort method + just get the last max res range rather than doing within the loop
 
   // Get the dEdx of the hits at the start of the track
   std::vector<float> dedxPerHitAtStart;

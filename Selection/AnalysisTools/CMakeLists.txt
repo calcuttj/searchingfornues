@@ -46,6 +46,7 @@ art_make( TOOL_LIBRARIES lardataobj_RecoBase
                          lardataobj_RawData
                          ubobj_Trigger
                          ubreco_BlipRecoAlg
+                         E4Track
            LIB_LIBRARIES ubreco_BlipRecoAlg
         )
 

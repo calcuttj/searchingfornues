@@ -4,6 +4,7 @@ include_directories( $ENV{LARPANDORACONTENT_INC} )
 add_subdirectory(SelectionTools)
 add_subdirectory(AnalysisTools)
 add_subdirectory(job)
+add_subdirectory(E4Track)
 
 art_make( MODULE_LIBRARIES larcorealg_Geometry
                            larcore_Geometry_Geometry_service
