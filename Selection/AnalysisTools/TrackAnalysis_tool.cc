@@ -100,9 +100,12 @@ private:
   float CalculateTrackTrunkdEdxByRange(const std::vector<float> &dedxPerHit, const std::vector<float> &residualRangePerHit);
   void CalculateTrackDeflections(const art::Ptr<recob::Track> &trk, std::vector<float> &mean_v, std::vector<float> &stdev_v, std::vector<float> &separation_mean_v);
 
-  float DoHypFits(const std::vector<float> &dedxPerHit,
-                  const std::vector<float> &residualRangePerHit,
-                  int pdg);
+  
+  void DoHypFits(
+    const std::vector<float> &dedxPerHit,
+    const std::vector<float> &residualRangePerHit,
+    int plane);
+
   std::vector<std::pair<float, unsigned int>> GetSortedRRIndices(
      const std::vector<float> &residualRangePerHit, bool far_first=true);
 
@@ -273,6 +276,33 @@ private:
   std::vector<float> _trk_hypfit_kaon_gaus_u_v;
   std::vector<float> _trk_hypfit_kaon_gaus_v_v;
   std::vector<float> _trk_hypfit_kaon_gaus_y_v;
+
+  std::map<std::tuple<int, bool, int>, std::vector<float>*> fHypFitHolder {
+    {{2212, true, 0}, &_trk_hypfit_proton_likelihood_u_v},
+    {{2212, true, 1}, &_trk_hypfit_proton_likelihood_v_v},
+    {{2212, true, 2}, &_trk_hypfit_proton_likelihood_y_v},
+    {{211, true, 0}, &_trk_hypfit_pion_likelihood_u_v},
+    {{211, true, 1}, &_trk_hypfit_pion_likelihood_v_v},
+    {{211, true, 2}, &_trk_hypfit_pion_likelihood_y_v},
+    {{13, true, 0}, &_trk_hypfit_muon_likelihood_u_v},
+    {{13, true, 1}, &_trk_hypfit_muon_likelihood_v_v},
+    {{13, true, 2}, &_trk_hypfit_muon_likelihood_y_v},
+    {{321, true, 0}, &_trk_hypfit_kaon_likelihood_u_v},
+    {{321, true, 1}, &_trk_hypfit_kaon_likelihood_v_v},
+    {{321, true, 2}, &_trk_hypfit_kaon_likelihood_y_v},
+    {{2212, false, 0}, &_trk_hypfit_proton_gaus_u_v},
+    {{2212, false, 1}, &_trk_hypfit_proton_gaus_v_v},
+    {{2212, false, 2}, &_trk_hypfit_proton_gaus_y_v},
+    {{211, false, 0}, &_trk_hypfit_pion_gaus_u_v},
+    {{211, false, 1}, &_trk_hypfit_pion_gaus_v_v},
+    {{211, false, 2}, &_trk_hypfit_pion_gaus_y_v},
+    {{13, false, 0}, &_trk_hypfit_muon_gaus_u_v},
+    {{13, false, 1}, &_trk_hypfit_muon_gaus_v_v},
+    {{13, false, 2}, &_trk_hypfit_muon_gaus_y_v},
+    {{321, false, 0}, &_trk_hypfit_kaon_gaus_u_v},
+    {{321, false, 1}, &_trk_hypfit_kaon_gaus_v_v},
+    {{321, false, 2}, &_trk_hypfit_kaon_gaus_y_v},
+  };
 };
 
 //----------------------------------------------------------------------------
@@ -320,6 +350,14 @@ TrackAnalysis::TrackAnalysis(const fhicl::ParameterSet &p)
     llr_pid_calculator.set_corr_par_binning(2, correction_parameters.parameter_correction_edges_pl_2);
     llr_pid_calculator.set_correction_tables(2, correction_parameters.correction_table_pl_2);
   }
+
+  // for (const auto & pdg : {2212, 211, 13, 321}) {
+  //   for (const auto & type : {True, False}) {
+  //     for (const auto & plane : {0, 1, 2}) {
+
+  //     }
+  //   }
+  // }
 }
 
 //----------------------------------------------------------------------------
@@ -671,6 +709,11 @@ void TrackAnalysis::analyzeSlice(art::Event const &e, std::vector<ProxyPfpElem_t
           _trk_trunk_rr_dEdx_y_v.back() = trk_trunk_rr_dEdx;
         }
         _trk_llr_pid_v.back() += llr_pid;
+
+
+        //Do hypothetical track-length fits for momentum.
+        //TODO -- nominal vs corrected dedx vals?
+        DoHypFits(dedx_values, rr, plane);
       }
       _trk_llr_pid_score_v.back() = atan(_trk_llr_pid_v.back() / 100.) * 2 / 3.14159266;  
 
@@ -804,6 +847,15 @@ void TrackAnalysis::fillDefault()
   _trk_avg_deflection_separation_mean_v.push_back(std::numeric_limits<float>::lowest());
 
   _trk_end_spacepoints_v.push_back(std::numeric_limits<int>::lowest());
+
+  for (const auto & pdg : {2212, 211, 13, 321}) {
+    for (const auto & type : {true, false}) {
+      for (const auto & plane : {0, 1, 2}) {
+        fHypFitHolder[{pdg, type, plane}]->push_back(
+          std::numeric_limits<int>::lowest());
+      }
+    }
+  }
 
   _trk_hypfit_proton_likelihood_u_v.push_back(std::numeric_limits<int>::lowest());
   _trk_hypfit_proton_likelihood_v_v.push_back(std::numeric_limits<int>::lowest());
@@ -942,30 +994,30 @@ void TrackAnalysis::setBranches(TTree *_tree)
 
   _tree->Branch("trk_end_spacepoints_v", "std::vector<int>", &_trk_end_spacepoints_v);
 
-  _tree->Branch("_trk_hypfit_proton_likelihood_u_v", "std::vector<float>", &_trk_hypfit_proton_likelihood_u_v);
-  _tree->Branch("_trk_hypfit_proton_likelihood_v_v", "std::vector<float>", &_trk_hypfit_proton_likelihood_v_v);
-  _tree->Branch("_trk_hypfit_proton_likelihood_y_v", "std::vector<float>", &_trk_hypfit_proton_likelihood_y_v);
-  _tree->Branch("_trk_hypfit_proton_gaus_u_v", "std::vector<float>", &_trk_hypfit_proton_gaus_u_v);
-  _tree->Branch("_trk_hypfit_proton_gaus_v_v", "std::vector<float>", &_trk_hypfit_proton_gaus_v_v);
-  _tree->Branch("_trk_hypfit_proton_gaus_y_v", "std::vector<float>", &_trk_hypfit_proton_gaus_y_v);
-  _tree->Branch("_trk_hypfit_pion_likelihood_u_v", "std::vector<float>", &_trk_hypfit_pion_likelihood_u_v);
-  _tree->Branch("_trk_hypfit_pion_likelihood_v_v", "std::vector<float>", &_trk_hypfit_pion_likelihood_v_v);
-  _tree->Branch("_trk_hypfit_pion_likelihood_y_v", "std::vector<float>", &_trk_hypfit_pion_likelihood_y_v);
-  _tree->Branch("_trk_hypfit_pion_gaus_u_v", "std::vector<float>", &_trk_hypfit_pion_gaus_u_v);
-  _tree->Branch("_trk_hypfit_pion_gaus_v_v", "std::vector<float>", &_trk_hypfit_pion_gaus_v_v);
-  _tree->Branch("_trk_hypfit_pion_gaus_y_v", "std::vector<float>", &_trk_hypfit_pion_gaus_y_v);
-  _tree->Branch("_trk_hypfit_muon_likelihood_u_v", "std::vector<float>", &_trk_hypfit_muon_likelihood_u_v);
-  _tree->Branch("_trk_hypfit_muon_likelihood_v_v", "std::vector<float>", &_trk_hypfit_muon_likelihood_v_v);
-  _tree->Branch("_trk_hypfit_muon_likelihood_y_v", "std::vector<float>", &_trk_hypfit_muon_likelihood_y_v);
-  _tree->Branch("_trk_hypfit_muon_gaus_u_v", "std::vector<float>", &_trk_hypfit_muon_gaus_u_v);
-  _tree->Branch("_trk_hypfit_muon_gaus_v_v", "std::vector<float>", &_trk_hypfit_muon_gaus_v_v);
-  _tree->Branch("_trk_hypfit_muon_gaus_y_v", "std::vector<float>", &_trk_hypfit_muon_gaus_y_v);
-  _tree->Branch("_trk_hypfit_kaon_likelihood_u_v", "std::vector<float>", &_trk_hypfit_kaon_likelihood_u_v);
-  _tree->Branch("_trk_hypfit_kaon_likelihood_v_v", "std::vector<float>", &_trk_hypfit_kaon_likelihood_v_v);
-  _tree->Branch("_trk_hypfit_kaon_likelihood_y_v", "std::vector<float>", &_trk_hypfit_kaon_likelihood_y_v);
-  _tree->Branch("_trk_hypfit_kaon_gaus_u_v", "std::vector<float>", &_trk_hypfit_kaon_gaus_u_v);
-  _tree->Branch("_trk_hypfit_kaon_gaus_v_v", "std::vector<float>", &_trk_hypfit_kaon_gaus_v_v);
-  _tree->Branch("_trk_hypfit_kaon_gaus_y_v", "std::vector<float>", &_trk_hypfit_kaon_gaus_y_v);
+  _tree->Branch("trk_hypfit_proton_likelihood_u_v", "std::vector<float>", &_trk_hypfit_proton_likelihood_u_v);
+  _tree->Branch("trk_hypfit_proton_likelihood_v_v", "std::vector<float>", &_trk_hypfit_proton_likelihood_v_v);
+  _tree->Branch("trk_hypfit_proton_likelihood_y_v", "std::vector<float>", &_trk_hypfit_proton_likelihood_y_v);
+  _tree->Branch("trk_hypfit_proton_gaus_u_v", "std::vector<float>", &_trk_hypfit_proton_gaus_u_v);
+  _tree->Branch("trk_hypfit_proton_gaus_v_v", "std::vector<float>", &_trk_hypfit_proton_gaus_v_v);
+  _tree->Branch("trk_hypfit_proton_gaus_y_v", "std::vector<float>", &_trk_hypfit_proton_gaus_y_v);
+  _tree->Branch("trk_hypfit_pion_likelihood_u_v", "std::vector<float>", &_trk_hypfit_pion_likelihood_u_v);
+  _tree->Branch("trk_hypfit_pion_likelihood_v_v", "std::vector<float>", &_trk_hypfit_pion_likelihood_v_v);
+  _tree->Branch("trk_hypfit_pion_likelihood_y_v", "std::vector<float>", &_trk_hypfit_pion_likelihood_y_v);
+  _tree->Branch("trk_hypfit_pion_gaus_u_v", "std::vector<float>", &_trk_hypfit_pion_gaus_u_v);
+  _tree->Branch("trk_hypfit_pion_gaus_v_v", "std::vector<float>", &_trk_hypfit_pion_gaus_v_v);
+  _tree->Branch("trk_hypfit_pion_gaus_y_v", "std::vector<float>", &_trk_hypfit_pion_gaus_y_v);
+  _tree->Branch("trk_hypfit_muon_likelihood_u_v", "std::vector<float>", &_trk_hypfit_muon_likelihood_u_v);
+  _tree->Branch("trk_hypfit_muon_likelihood_v_v", "std::vector<float>", &_trk_hypfit_muon_likelihood_v_v);
+  _tree->Branch("trk_hypfit_muon_likelihood_y_v", "std::vector<float>", &_trk_hypfit_muon_likelihood_y_v);
+  _tree->Branch("trk_hypfit_muon_gaus_u_v", "std::vector<float>", &_trk_hypfit_muon_gaus_u_v);
+  _tree->Branch("trk_hypfit_muon_gaus_v_v", "std::vector<float>", &_trk_hypfit_muon_gaus_v_v);
+  _tree->Branch("trk_hypfit_muon_gaus_y_v", "std::vector<float>", &_trk_hypfit_muon_gaus_y_v);
+  _tree->Branch("trk_hypfit_kaon_likelihood_u_v", "std::vector<float>", &_trk_hypfit_kaon_likelihood_u_v);
+  _tree->Branch("trk_hypfit_kaon_likelihood_v_v", "std::vector<float>", &_trk_hypfit_kaon_likelihood_v_v);
+  _tree->Branch("trk_hypfit_kaon_likelihood_y_v", "std::vector<float>", &_trk_hypfit_kaon_likelihood_y_v);
+  _tree->Branch("trk_hypfit_kaon_gaus_u_v", "std::vector<float>", &_trk_hypfit_kaon_gaus_u_v);
+  _tree->Branch("trk_hypfit_kaon_gaus_v_v", "std::vector<float>", &_trk_hypfit_kaon_gaus_v_v);
+  _tree->Branch("trk_hypfit_kaon_gaus_y_v", "std::vector<float>", &_trk_hypfit_kaon_gaus_y_v);
 }
 
 void TrackAnalysis::resetTTree(TTree *_tree)
@@ -1078,33 +1130,38 @@ void TrackAnalysis::resetTTree(TTree *_tree)
 
   _trk_end_spacepoints_v.clear();
 
-  _trk_hypfit_proton_likelihood_u_v.clear();
-  _trk_hypfit_proton_likelihood_v_v.clear();
-  _trk_hypfit_proton_likelihood_y_v.clear();
-  _trk_hypfit_proton_gaus_u_v.clear();
-  _trk_hypfit_proton_gaus_v_v.clear();
-  _trk_hypfit_proton_gaus_y_v.clear();
 
-  _trk_hypfit_pion_likelihood_u_v.clear();
-  _trk_hypfit_pion_likelihood_v_v.clear();
-  _trk_hypfit_pion_likelihood_y_v.clear();
-  _trk_hypfit_pion_gaus_u_v.clear();
-  _trk_hypfit_pion_gaus_v_v.clear();
-  _trk_hypfit_pion_gaus_y_v.clear();
+  for (auto & member : fHypFitHolder) {
+    member.second->clear();
+  }
 
-  _trk_hypfit_muon_likelihood_u_v.clear();
-  _trk_hypfit_muon_likelihood_v_v.clear();
-  _trk_hypfit_muon_likelihood_y_v.clear();
-  _trk_hypfit_muon_gaus_u_v.clear();
-  _trk_hypfit_muon_gaus_v_v.clear();
-  _trk_hypfit_muon_gaus_y_v.clear();
+  // _trk_hypfit_proton_likelihood_u_v.clear();
+  // _trk_hypfit_proton_likelihood_v_v.clear();
+  // _trk_hypfit_proton_likelihood_y_v.clear();
+  // _trk_hypfit_proton_gaus_u_v.clear();
+  // _trk_hypfit_proton_gaus_v_v.clear();
+  // _trk_hypfit_proton_gaus_y_v.clear();
 
-  _trk_hypfit_kaon_likelihood_u_v.clear();
-  _trk_hypfit_kaon_likelihood_v_v.clear();
-  _trk_hypfit_kaon_likelihood_y_v.clear();
-  _trk_hypfit_kaon_gaus_u_v.clear();
-  _trk_hypfit_kaon_gaus_v_v.clear();
-  _trk_hypfit_kaon_gaus_y_v.clear();
+  // _trk_hypfit_pion_likelihood_u_v.clear();
+  // _trk_hypfit_pion_likelihood_v_v.clear();
+  // _trk_hypfit_pion_likelihood_y_v.clear();
+  // _trk_hypfit_pion_gaus_u_v.clear();
+  // _trk_hypfit_pion_gaus_v_v.clear();
+  // _trk_hypfit_pion_gaus_y_v.clear();
+
+  // _trk_hypfit_muon_likelihood_u_v.clear();
+  // _trk_hypfit_muon_likelihood_v_v.clear();
+  // _trk_hypfit_muon_likelihood_y_v.clear();
+  // _trk_hypfit_muon_gaus_u_v.clear();
+  // _trk_hypfit_muon_gaus_v_v.clear();
+  // _trk_hypfit_muon_gaus_y_v.clear();
+
+  // _trk_hypfit_kaon_likelihood_u_v.clear();
+  // _trk_hypfit_kaon_likelihood_v_v.clear();
+  // _trk_hypfit_kaon_likelihood_y_v.clear();
+  // _trk_hypfit_kaon_gaus_u_v.clear();
+  // _trk_hypfit_kaon_gaus_v_v.clear();
+  // _trk_hypfit_kaon_gaus_y_v.clear();
 }
 
 float TrackAnalysis::CalculateTrackTrunkdEdxByHits(const std::vector<float> &dEdx_values) 
@@ -1168,9 +1225,10 @@ float TrackAnalysis::CalculateTrackTrunkdEdxByHits(const std::vector<float> &dEd
   }
 }
 
-float TrackAnalysis::DoHypFits(const std::vector<float> &dedxPerHit,
-                               const std::vector<float> &residualRangePerHit,
-                               int pdg) {
+void TrackAnalysis::DoHypFits(
+    const std::vector<float> &dedxPerHit,
+    const std::vector<float> &residualRangePerHit,
+    int plane) {
   //First -- sort by residual range indices. Shortest first
   auto res_range_indices = GetSortedRRIndices(residualRangePerHit);
   std::vector<double> sorted_res_range, sorted_dedx;
@@ -1179,7 +1237,20 @@ float TrackAnalysis::DoHypFits(const std::vector<float> &dedxPerHit,
     sorted_dedx.push_back(dedxPerHit[index]);
   }
 
-  return fHypFitter.Likelihood(sorted_dedx, sorted_res_range, pdg);
+  //Loop over the pdgs & type of fit (LH {true} vs gaus {false})
+  //and run the fit
+  // std::map<std::pair<int, bool>, float> results;
+  for (const auto & pdg : {2212, 211, 13, 321}) {
+    for (const auto & type : {true, false}) {
+      fHypFitHolder[{pdg, type, plane}]->push_back(
+        type ?
+        fHypFitter.Likelihood(sorted_dedx, sorted_res_range, pdg) :
+        fHypFitter.Gaussian(sorted_dedx, sorted_res_range, pdg)
+      );
+    }
+  }
+  
+  // return results;
 }
 
 std::vector<std::pair<float, unsigned int>> TrackAnalysis::GetSortedRRIndices(
