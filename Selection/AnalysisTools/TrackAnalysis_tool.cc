@@ -1308,8 +1308,6 @@ float TrackAnalysis::CalculateTrackTrunkdEdxByRange(const std::vector<float> &de
       return a.first > b.first;
   });
 
-  //TODO -- run the the sort method + just get the last max res range rather than doing within the loop
-
   // Get the dEdx of the hits at the start of the track
   std::vector<float> dedxPerHitAtStart;
   for (unsigned int i = nHitsToSkip; i < residualRangeIndices.size(); ++i)
