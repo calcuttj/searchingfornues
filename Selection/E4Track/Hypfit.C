@@ -11,11 +11,13 @@ E4Track::Hypfit::~Hypfit(){
 }
 
 double E4Track::Hypfit::Gaussian(const vector<double> & dEdx, const vector<double> & ResRange, int PID){
-
+  // std::cout << "G: " << dEdx.size() << " " << ResRange.size() << " " << PID << std::endl;
   // == PID input : mass hypothesis, valid only for muons, charged pions, and protons
-  if(!(PID == 13 || PID == 2212 || PID == 211)){
+  if((!(PID == 13 || PID == 2212 || PID == 211)) || (dEdx.size() == 0) ||
+      (ResRange.size() == 0)) {
     return -9999.;
   }
+  // std::cout << "passed" << std::endl;
   // == Tunable parameters
   double min_additional_res_length = 0.;
   double max_additional_res_length = max_additional_res_length_pion;
@@ -82,11 +84,13 @@ double E4Track::Hypfit::Gaussian(const vector<double> & dEdx, const vector<doubl
 }
 
 double E4Track::Hypfit::Likelihood(const vector<double> & dEdx, const vector<double> & ResRange, int PID){
-
+  // std::cout << "LLH: " << dEdx.size() << " " << ResRange.size() << " " << PID << std::endl;
   // == PID input : mass hypothesis, valid only for muons, charged pions, and protons
-  if(!(PID == 13 || PID == 2212 || PID == 211)){
+  if((!(PID == 13 || PID == 2212 || PID == 211)) || (dEdx.size() == 0) ||
+      (ResRange.size() == 0)) {
     return -9999.;
   }
+  // std::cout << "passed" << std::endl;
   // == Tunable parameters
   double min_additional_res_length = 0.;
   double max_additional_res_length = max_additional_res_length_pion;

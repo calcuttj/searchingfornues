@@ -79,6 +79,11 @@ public:
      */
   void SaveTruth(art::Event const &e);
 
+
+  /**
+     * @brief Fill Default Info just for HypFit values
+     */
+  void AddHypFitDefaults();
   /**
      * @brief Fill Default info for event associated to neutrino
      */
@@ -642,6 +647,10 @@ void TrackAnalysis::analyzeSlice(art::Event const &e, std::vector<ProxyPfpElem_t
       _trk_trunk_rr_dEdx_v_v.push_back(std::numeric_limits<float>::lowest());
       _trk_trunk_rr_dEdx_y_v.push_back(std::numeric_limits<float>::lowest());
 
+      //Add defaults for Hyp Fit values so that they line up with the size of 
+      // the other vectors
+      AddHypFitDefaults();
+
       auto calo_v = calo_proxy[trk.key()].get<anab::Calorimetry>();
       for (auto const &calo : calo_v)
       {
@@ -736,6 +745,17 @@ void TrackAnalysis::analyzeSlice(art::Event const &e, std::vector<ProxyPfpElem_t
       fillDefault();
     }
   } // for all PFParticles
+}
+
+void TrackAnalysis::AddHypFitDefaults(){
+  for (const auto & pdg : {2212, 211, 13, 321}) {
+    for (const auto & type : {true, false}) {
+      for (const auto & plane : {0, 1, 2}) {
+        fHypFitHolder[{pdg, type, plane}]->push_back(
+          std::numeric_limits<int>::lowest());
+      }
+    }
+  }
 }
 
 void TrackAnalysis::fillDefault()
@@ -848,42 +868,37 @@ void TrackAnalysis::fillDefault()
 
   _trk_end_spacepoints_v.push_back(std::numeric_limits<int>::lowest());
 
-  for (const auto & pdg : {2212, 211, 13, 321}) {
-    for (const auto & type : {true, false}) {
-      for (const auto & plane : {0, 1, 2}) {
-        fHypFitHolder[{pdg, type, plane}]->push_back(
-          std::numeric_limits<int>::lowest());
-      }
-    }
-  }
 
-  _trk_hypfit_proton_likelihood_u_v.push_back(std::numeric_limits<int>::lowest());
-  _trk_hypfit_proton_likelihood_v_v.push_back(std::numeric_limits<int>::lowest());
-  _trk_hypfit_proton_likelihood_y_v.push_back(std::numeric_limits<int>::lowest());
-  _trk_hypfit_proton_gaus_u_v.push_back(std::numeric_limits<int>::lowest());
-  _trk_hypfit_proton_gaus_v_v.push_back(std::numeric_limits<int>::lowest());
-  _trk_hypfit_proton_gaus_y_v.push_back(std::numeric_limits<int>::lowest());
+  AddHypFitDefaults();
 
-  _trk_hypfit_pion_likelihood_u_v.push_back(std::numeric_limits<int>::lowest());
-  _trk_hypfit_pion_likelihood_v_v.push_back(std::numeric_limits<int>::lowest());
-  _trk_hypfit_pion_likelihood_y_v.push_back(std::numeric_limits<int>::lowest());
-  _trk_hypfit_pion_gaus_u_v.push_back(std::numeric_limits<int>::lowest());
-  _trk_hypfit_pion_gaus_v_v.push_back(std::numeric_limits<int>::lowest());
-  _trk_hypfit_pion_gaus_y_v.push_back(std::numeric_limits<int>::lowest());
 
-  _trk_hypfit_muon_likelihood_u_v.push_back(std::numeric_limits<int>::lowest());
-  _trk_hypfit_muon_likelihood_v_v.push_back(std::numeric_limits<int>::lowest());
-  _trk_hypfit_muon_likelihood_y_v.push_back(std::numeric_limits<int>::lowest());
-  _trk_hypfit_muon_gaus_u_v.push_back(std::numeric_limits<int>::lowest());
-  _trk_hypfit_muon_gaus_v_v.push_back(std::numeric_limits<int>::lowest());
-  _trk_hypfit_muon_gaus_y_v.push_back(std::numeric_limits<int>::lowest());
+  //_trk_hypfit_proton_likelihood_u_v.push_back(std::numeric_limits<int>::lowest());
+  //_trk_hypfit_proton_likelihood_v_v.push_back(std::numeric_limits<int>::lowest());
+  //_trk_hypfit_proton_likelihood_y_v.push_back(std::numeric_limits<int>::lowest());
+  //_trk_hypfit_proton_gaus_u_v.push_back(std::numeric_limits<int>::lowest());
+  //_trk_hypfit_proton_gaus_v_v.push_back(std::numeric_limits<int>::lowest());
+  //_trk_hypfit_proton_gaus_y_v.push_back(std::numeric_limits<int>::lowest());
 
-  _trk_hypfit_kaon_likelihood_u_v.push_back(std::numeric_limits<int>::lowest());
-  _trk_hypfit_kaon_likelihood_v_v.push_back(std::numeric_limits<int>::lowest());
-  _trk_hypfit_kaon_likelihood_y_v.push_back(std::numeric_limits<int>::lowest());
-  _trk_hypfit_kaon_gaus_u_v.push_back(std::numeric_limits<int>::lowest());
-  _trk_hypfit_kaon_gaus_v_v.push_back(std::numeric_limits<int>::lowest());
-  _trk_hypfit_kaon_gaus_y_v.push_back(std::numeric_limits<int>::lowest());
+  //_trk_hypfit_pion_likelihood_u_v.push_back(std::numeric_limits<int>::lowest());
+  //_trk_hypfit_pion_likelihood_v_v.push_back(std::numeric_limits<int>::lowest());
+  //_trk_hypfit_pion_likelihood_y_v.push_back(std::numeric_limits<int>::lowest());
+  //_trk_hypfit_pion_gaus_u_v.push_back(std::numeric_limits<int>::lowest());
+  //_trk_hypfit_pion_gaus_v_v.push_back(std::numeric_limits<int>::lowest());
+  //_trk_hypfit_pion_gaus_y_v.push_back(std::numeric_limits<int>::lowest());
+
+  //_trk_hypfit_muon_likelihood_u_v.push_back(std::numeric_limits<int>::lowest());
+  //_trk_hypfit_muon_likelihood_v_v.push_back(std::numeric_limits<int>::lowest());
+  //_trk_hypfit_muon_likelihood_y_v.push_back(std::numeric_limits<int>::lowest());
+  //_trk_hypfit_muon_gaus_u_v.push_back(std::numeric_limits<int>::lowest());
+  //_trk_hypfit_muon_gaus_v_v.push_back(std::numeric_limits<int>::lowest());
+  //_trk_hypfit_muon_gaus_y_v.push_back(std::numeric_limits<int>::lowest());
+
+  //_trk_hypfit_kaon_likelihood_u_v.push_back(std::numeric_limits<int>::lowest());
+  //_trk_hypfit_kaon_likelihood_v_v.push_back(std::numeric_limits<int>::lowest());
+  //_trk_hypfit_kaon_likelihood_y_v.push_back(std::numeric_limits<int>::lowest());
+  //_trk_hypfit_kaon_gaus_u_v.push_back(std::numeric_limits<int>::lowest());
+  //_trk_hypfit_kaon_gaus_v_v.push_back(std::numeric_limits<int>::lowest());
+  //_trk_hypfit_kaon_gaus_y_v.push_back(std::numeric_limits<int>::lowest());
 }
 
 void TrackAnalysis::setBranches(TTree *_tree)
@@ -1229,6 +1244,12 @@ void TrackAnalysis::DoHypFits(
     const std::vector<float> &dedxPerHit,
     const std::vector<float> &residualRangePerHit,
     int plane) {
+  
+  if (plane < 0 || plane > 2) {
+    std::cout << "HYPFITS GIVEN PLANE " << plane << std::endl;
+    return;
+  }
+
   //First -- sort by residual range indices. Shortest first
   auto res_range_indices = GetSortedRRIndices(residualRangePerHit);
   std::vector<double> sorted_res_range, sorted_dedx;
@@ -1242,7 +1263,8 @@ void TrackAnalysis::DoHypFits(
   // std::map<std::pair<int, bool>, float> results;
   for (const auto & pdg : {2212, 211, 13, 321}) {
     for (const auto & type : {true, false}) {
-      fHypFitHolder[{pdg, type, plane}]->push_back(
+      // std::cout << pdg << " " << type << " " << plane << std::endl;
+      fHypFitHolder[{pdg, type, plane}]->back() = (
         type ?
         fHypFitter.Likelihood(sorted_dedx, sorted_res_range, pdg) :
         fHypFitter.Gaussian(sorted_dedx, sorted_res_range, pdg)
